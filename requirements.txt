@@ -1,2 +1,7 @@
 streamlit
 pandas
+numpy
+torch
+sentence-transformers
+transformers
+matplotlib
