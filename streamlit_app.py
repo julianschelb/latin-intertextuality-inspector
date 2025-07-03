@@ -10,9 +10,9 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from matplotlib.colors import LinearSegmentedColormap
 
 # ─────────── MODEL CONSTANTS ───────────
-EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # "bowphs/PhilBerta"
+EMBED_MODEL_NAME = "julian-schelb/PhilBerta-latin-intertextuality"  # "bowphs/PhilBerta"
 # "julian-schelb/xlm-roberta-base-latin-intertextuality"
-CLF_MODEL_NAME = "ParitKansal/BERT_Paraphrase_Detection_GLUE_MRPC"
+CLF_MODEL_NAME = "julian-schelb/SPhilBerta-latin-intertextuality"
 POS_CLASS_IDX = 1  # positive ("intertextual") is *first* label
 COLOR_MAP = LinearSegmentedColormap.from_list(
     "light_blues", ["#ffffff", "#2676b8"])
@@ -262,7 +262,7 @@ if can_process:
                     tokenizer, clf_model, row["paraphrased"], row["original"], device)
 
                 # st.markdown(weights_para)
-                st.markdown(weight_orig)
+                #st.markdown(weight_orig)
 
                 # Display attention weights for original texts
                 html = attention_tokens_to_html(weight_orig)
