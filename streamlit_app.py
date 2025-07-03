@@ -25,7 +25,7 @@ def load_models():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     embedder = SentenceTransformer(EMBED_MODEL_NAME, device=device)
     tokenizer = AutoTokenizer.from_pretrained(
-        CLF_MODEL_NAME, trust_remote_code=True)
+        CLF_MODEL_NAME, use_fast=False, trust_remote_code=True)
     clf_model = AutoModelForSequenceClassification.from_pretrained(
         CLF_MODEL_NAME).to(device)
     clf_model.eval()
