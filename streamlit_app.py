@@ -7,8 +7,8 @@ import torch
 from typing import Optional
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from matplotlib.colors import LinearSegmentedColormap
 from sklearn.metrics.pairwise import cosine_similarity
+from corpus import CorpusWrapper
 
 
 # ─────────── MODEL CONSTANTS ───────────
@@ -16,8 +16,7 @@ EMBED_MODEL_NAME = "julian-schelb/SPhilBerta-latin-intertextuality"  # "bowphs/P
 # "julian-schelb/xlm-roberta-base-latin-intertextuality"
 CLF_MODEL_NAME = "julian-schelb/PhilBerta-latin-intertextuality"
 POS_CLASS_IDX = 1  # positive ("intertextual") is *first* label
-COLOR_MAP = LinearSegmentedColormap.from_list(
-    "light_blues", ["#ffffff", "#2676b8"])
+
 # ─────────── CACHE LOADER ───────────
 
 
@@ -69,114 +68,6 @@ def calc_probability(tokenizer, model, original: str, paraphrase: str, device: s
 
     return float(probs[POS_CLASS_IDX])
 
-
-# =================== ATTENTION WIEGHTS ===================
-
-
-# def get_avg_attention_per_token(
-#     tokenizer, model, para: str, orig: str, device: str,
-#     max_tokens: int = 512, filter_special_tokens: bool = True
-# ) -> tuple[list, list]:
-#     """Return two lists of (token, average_attention_received) pairs for para and orig separately."""
-#     enc = tokenizer(para.strip(), orig.strip(), return_tensors="pt",
-#                     truncation=True, max_length=max_tokens).to(device)
-
-#     with torch.no_grad():
-#         attn = model(**enc, output_attentions=True).attentions[-4]
-#         attn = attn[0].mean(dim=0).cpu().numpy()  # (seq_len, seq_len)
-
-#     input_ids = enc["input_ids"][0][:max_tokens]
-#     tokens = tokenizer.convert_ids_to_tokens(input_ids)
-#     attn = attn[:len(tokens), :len(tokens)]
-
-#     # Compute attention received
-#     avg_received = attn.mean(axis=0)
-
-#     # Find separator token index to split para and orig
-#     sep_id = 2  # tokenizer.sep_token_id
-#     print(input_ids)
-#     sep_indices = (input_ids == sep_id).nonzero(as_tuple=True)[0].tolist()
-
-#     if len(sep_indices) < 1:
-#         raise ValueError(
-#             "Could not find separator token to split para and orig.")
-
-#     # para ends at first [SEP], orig starts after
-#     split_index = sep_indices[0] + 1
-
-#     # Split tokens, attention scores, and ids
-#     para_parts = list(
-#         zip(tokens[:split_index], avg_received[:split_index], input_ids[:split_index]))
-#     orig_parts = list(
-#         zip(tokens[split_index:], avg_received[split_index:], input_ids[split_index:]))
-
-#     if filter_special_tokens:
-#         special_ids = tokenizer.all_special_ids
-#         para_parts = [(tok, score) for tok, score,
-#                       tok_id in para_parts if tok_id.item() not in special_ids]
-#         orig_parts = [(tok, score) for tok, score,
-#                       tok_id in orig_parts if tok_id.item() not in special_ids]
-
-#     return para_parts, orig_parts
-
-
-# def attention_tokens_to_html(token_attention: list, cmap: str = "Blues") -> str:
-#     """Render tokens as colored boxes with pill-style visual grouping for subwords."""
-#     import matplotlib.cm as cm
-#     import matplotlib.colors as mcolors
-
-#     tokens, scores = zip(*token_attention)
-
-#     # Normalize attention scores
-#     norm = mcolors.Normalize(vmin=min(scores), vmax=max(scores))
-#     colormap = COLOR_MAP  # cm.get_cmap(cmap)
-
-#     html = ""
-#     for i, (token, score) in enumerate(token_attention):
-#         rgba = colormap(norm(score))
-#         hex_color = mcolors.to_hex(rgba)
-#         clean_token = token.replace("Ġ", "").replace("▁", "").replace("##", "")
-
-#         is_start = (
-#             i == 0
-#             or token.startswith("Ġ")
-#             or token.startswith("▁")
-#             or token.startswith("<")
-#             or token.startswith("[")
-#         )
-#         is_end = (
-#             i == len(tokens) - 1
-#             or tokens[i + 1].startswith("Ġ")
-#             or tokens[i + 1].startswith("▁")
-#             or tokens[i + 1].startswith("<")
-#             or tokens[i + 1].startswith("[")
-#         )
-
-#         # Border radius logic
-#         if is_start and is_end:
-#             border_radius = "6px"
-#         elif is_start:
-#             border_radius = "6px 0 0 6px"
-#         elif is_end:
-#             border_radius = "0 6px 6px 0"
-#         else:
-#             border_radius = "0"
-
-#         # Padding logic
-#         if is_start or is_end:
-#             padding = "2px 6px"
-#         else:
-#             padding = "2px 4px"
-
-#         # Add space between word groups
-#         if is_start and i != 0:
-#             html += " "
-
-#         html += f'<span style="background-color:{hex_color}; padding:{padding}; margin:1px 0px; border-radius:{border_radius}; display:inline-block;">{clean_token}</span>'
-
-#     return html
-
-
 # ─────────── UI CONFIG ───────────
 st.set_page_config(page_title="Inspector", layout="wide")
 # st.title("📜 Intertextuality Quick-Check")
@@ -203,6 +94,29 @@ embed_model_name = st.text_input(
 uploaded = st.file_uploader("File with Sentence Pairs:", type="csv")
 if uploaded is not None:
     df = pd.read_csv(uploaded)
+    with st.expander("Preview Sentence Pairs (first 5 rows)"):
+        st.dataframe(df.head())
+
+# Optional secondary corpus file (id,text)
+corpus_df: Optional[pd.DataFrame] = None
+corpus_file = st.file_uploader(
+    "Optional Corpus File (two columns: id,text):", type="csv", key="corpus_upload"
+)
+if corpus_file is not None:
+    try:
+        corpus_df = pd.read_csv(corpus_file)
+        required_cols = {"id", "text"}
+        missing_corpus = required_cols - set(corpus_df.columns)
+        if missing_corpus:
+            st.error(
+                f"Corpus CSV missing required column(s): {', '.join(missing_corpus)}"
+            )
+            corpus_df = None
+        else:
+            with st.expander("Preview Corpus (first 5 rows)"):
+                st.dataframe(corpus_df.head())
+    except Exception as e:
+        st.error(f"Failed to read corpus file: {e}")
 
 if df is None or df.empty:
     st.info("Upload a CSV or place **test_cases.csv** next to the script.")
@@ -223,10 +137,39 @@ if can_process:
     # ─────────── MODEL INFERENCE ───────────
     embedder, tokenizer, clf_model, device = load_models()
 
+    # Encode corpus if file uploaded
+    corpus_wrapper = None
+    if 'corpus_wrapper' in st.session_state:
+        prev = st.session_state['corpus_wrapper']
+        if corpus_df is not None and len(prev) != len(corpus_df):
+            st.session_state.pop('corpus_wrapper')
+
+    if corpus_df is not None and 'corpus_wrapper' not in st.session_state:
+        with st.spinner('🧱 Indexing corpus (embedding segments) …'):
+            try:
+                corpus_wrapper = CorpusWrapper(corpus_df, embedder)
+                st.session_state['corpus_wrapper'] = corpus_wrapper
+                st.success(f"Corpus indexed: {len(corpus_wrapper)} segments.")
+            except Exception as e:
+                st.error(f"Failed to index corpus: {e}")
+    elif 'corpus_wrapper' in st.session_state:
+        corpus_wrapper = st.session_state['corpus_wrapper']
+         
+
+    # Calculate similarity scores
     with st.spinner("🔎 Scoring pairs …"):
 
         cosine_list = []
         prob_list = []
+        rank_list = []
+        total_list = []
+        use_corpus_ranking = corpus_wrapper is not None and len(corpus_wrapper) > 0
+        if use_corpus_ranking:
+            corpus_embs = corpus_wrapper.embeddings  # (N, D)
+            corpus_norm = corpus_wrapper.normalize
+        else:
+            corpus_embs = None
+            corpus_norm = True
         for orig, para in zip(df["original"], df["paraphrased"]):
             # compute cosine similarity for a single pair
             sim = calc_cosine_similarity(embedder, orig, para)
@@ -235,8 +178,20 @@ if can_process:
             cosine_list.append(round(sim, 3))
             prob_list.append(round(prob, 3))
 
+            # Rank computation: treat paraphrase as candidate in temporary extended corpus for this query
+            if use_corpus_ranking:
+                rank, total, _score = corpus_wrapper.calc_rank(orig, para)
+                rank_list.append(rank)
+                total_list.append(total)
+            else:
+                rank_list.append(None)
+                total_list.append(None)
+
         df["cosine_similarity"] = cosine_list
         df["P_positive"] = prob_list
+        if use_corpus_ranking:
+            df["paraphrase_rank"] = rank_list
+            df["rank_total_docs"] = total_list
 
     # ─────────── LAYOUT ───────────
     st.subheader("Results")
@@ -261,9 +216,25 @@ if can_process:
                 sim_pct = max(-1, min(1, sim_value))  # Clamp the value
                 st.progress(int(sim_pct * 100),
                             text=f"**Cosine Similarity:** `{sim_value:.3f}`")
-                # st.markdown(
-                #     f"**Cosine Similarity:** `{sim_value:.3f}`  \n"
-                # )
+
+                # Actual rank progress bar
+                if corpus_wrapper is not None and len(corpus_wrapper) > 0 and 'paraphrase_rank' in df.columns:
+                    rank_value = row.get('paraphrase_rank')
+                    total_docs = row.get('rank_total_docs')
+                    if rank_value is not None and total_docs:
+                        if total_docs > 1:
+                            rank_pct = int((1 - (rank_value - 1) / (total_docs - 1)) * 100)
+                        else:
+                            rank_pct = 100
+                        st.progress(
+                            rank_pct,
+                            text=f"**Rank in Corpus Search:** `{rank_value}/{total_docs}`"
+                        )
+                    else:
+                        st.progress(0, text="**Rank in Corpus Search:** `N/A`")
+                else:
+                    st.progress(0, text="**Rank in Corpus Search:** `N/A` (no corpus)")
+   
 
                 # Display probability
                 prob_value = row["P_positive"]
@@ -271,27 +242,7 @@ if can_process:
                 prob_pct = max(0, min(1, prob_value))
                 st.progress(int(prob_pct * 100),
                             text=f"**Probability:** `{prob_value:.3f}`")
-                # st.markdown(
-                #     f"**Probability of Intertextuality:** `{prob_value:.3f}`  \n"
-                # )
 
-            # # Add a popover button for Attention Weights using an expander.
-            # with st.expander("Attention Weights"):
-            #     with st.spinner("Computing attention …"):
-            #         st.markdown("**Attention Weights:**")
-            #         weights_para, weight_orig = get_avg_attention_per_token(
-            #             tokenizer, clf_model, row["paraphrased"], row["original"], device)
-
-            #         st.markdown(weights_para)
-            #         st.markdown(weight_orig)
-
-            #         # Display attention weights for original texts
-            #         html = attention_tokens_to_html(weight_orig)
-            #         st.markdown(html, unsafe_allow_html=True)
-
-            #         # Display attention weights for paraphrased texts
-            #         html = attention_tokens_to_html(weights_para)
-            #         st.markdown(html, unsafe_allow_html=True)
 
     # ─────────── DOWNLOAD BUTTON ───────────
     st.download_button(

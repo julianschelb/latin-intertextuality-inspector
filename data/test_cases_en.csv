@@ -1,0 +1,12 @@
+case_id,query_id,source_id,original,paraphrased,operation_description
+case2_orig,shak. ham. 3.1.56,milton. parad. lost. 2.250,"To be or not to be, that is the question.","To be or not to be, that is the question.","Original quotation, unchanged"
+case2_synonym,shak. ham. 3.1.56,milton. parad. lost. 2.250,"To be or not to be, that is the question.","To exist or not to exist, that is the dilemma.","Replace key words with English synonyms"
+case2_drop_words,shak. ham. 3.1.56,milton. parad. lost. 2.250,"To be or not to be, that is the question.","To be or not — the question.","Remove auxiliary and filler words"
+case3_orig,lincoln. gettysburg. 1,jefferson. decl. 1,"All men are created equal.","All men are created equal.","Original quotation, unchanged"
+case3_shuffle,lincoln. gettysburg. 1,jefferson. decl. 1,"All men are created equal.","Created equal, all men are.","Re-order the clause"
+case3_noise,lincoln. gettysburg. 1,jefferson. decl. 1,"All men are created equal.","All men — truly, indeed — are created equal.","Insert random filler tokens"
+case4_orig,kennedy. inau. 1961,roosevelt. fireside. 1933,"Ask not what your country can do for you.","Ask not what your country can do for you.","Original quotation, unchanged"
+case4_synonym,kennedy. inau. 1961,roosevelt. fireside. 1933,"Ask not what your country can do for you.","Do not ask what your nation can provide you.","Replace with English synonyms"
+case4_drop_words,kennedy. inau. 1961,roosevelt. fireside. 1933,"Ask not what your country can do for you.","Ask what your country can do.","Remove modifiers and negation"
+case5_embed,shak. ham. 3.1.56,milton. parad. lost. 2.250,"To be or not to be, that is the question.","For centuries, philosophers, poets, and common people alike have wrestled with the ultimate existential dilemma — to be or not to be, that is the question — a line that captures the timeless uncertainty at the heart of human life.","Embed quotation into extended sentence context"
+case6_unrelated,shak. ham. 3.1.56,milton. parad. lost. 2.250,"To be or not to be, that is the question.","The economic impact of agricultural subsidies in the European Union remains a contentious topic among policy makers.","Completely unrelated content"
