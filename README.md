@@ -68,26 +68,3 @@ Open the local URL Streamlit prints (usually http://localhost:8501).
 3. (Optional) Upload a corpus CSV to enable rank computation.
 4. Click “Process” to compute embeddings, probabilities, and (if corpus) ranks.
 5. Scroll results; download the enriched CSV via the “Download Scored CSV” button.
-
-## 📤 Output Columns
-Added columns in the download:
-- `cosine_similarity`
-- `P_positive` (classifier probability of intertextuality)
-- `paraphrase_rank` (only if corpus provided)
-- `rank_total_docs` (denominator for rank)
-
-## ❓ Notes & Tips
-- All embeddings are cached per session to avoid re-loading models.
-- Rank = 1 + number of corpus entries with strictly higher similarity to the query (original text). Lower is better.
-- Large corpora increase initial indexing time; watch the progress spinner.
-
-## 🛠 Future Ideas
-- Add true retrieval previews (top-k corpus lines) inline.
-- Export similarity of paraphrase vs each top candidate.
-- Batch / CLI mode.
-
-## 📄 License
-See `LICENSE` for details.
-
----
-Feel free to open issues / suggestions for enhancements.
