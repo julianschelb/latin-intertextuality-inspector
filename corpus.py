@@ -71,6 +71,8 @@ class CorpusWrapper:
         normalize: bool = True,
         batch_size: int = 32,
         show_progress_bar: bool = False,
+        query_prompt_name: str | None = None,
+        match_prompt_name: str | None = None,
     ) -> None:
         if id_col not in df.columns or text_col not in df.columns:
             missing = {id_col, text_col} - set(df.columns)
@@ -80,18 +82,29 @@ class CorpusWrapper:
         self.text_col = text_col
         self.embedder = embedder
         self.normalize = normalize
+        self.query_prompt_name = query_prompt_name
+        self.match_prompt_name = match_prompt_name
 
-        texts: List[str] = self._df[text_col].astype(str).tolist()
-        # Compute embeddings once.
-        embeddings = embedder.encode(
-            texts,
+        texts: List[str] = self._df[self.text_col].astype(str).tolist()
+        # Encode corpus texts using match prompt if provided
+        encode_kwargs = dict(
             batch_size=batch_size,
             convert_to_numpy=True,
             show_progress_bar=show_progress_bar,
         )
+        if match_prompt_name:
+            try:
+                embeddings = embedder.encode(
+                    texts,
+                    prompt_name=match_prompt_name,
+                    **encode_kwargs,
+                )
+            except Exception:
+                embeddings = embedder.encode(texts, **encode_kwargs)
+        else:
+            embeddings = embedder.encode(texts, **encode_kwargs)
         if normalize:
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-            # Avoid division by zero
             norms[norms == 0] = 1.0
             embeddings = embeddings / norms
         self.embeddings = embeddings  # shape (N, D)
@@ -116,7 +129,13 @@ class CorpusWrapper:
 
     # ------------------------------------------------------------------
     def _embed_query(self, query: str) -> np.ndarray:
-        vec = self.embedder.encode(query, convert_to_numpy=True)
+        if self.query_prompt_name:
+            try:
+                vec = self.embedder.encode(query, convert_to_numpy=True, prompt_name=self.query_prompt_name)
+            except Exception:
+                vec = self.embedder.encode(query, convert_to_numpy=True)
+        else:
+            vec = self.embedder.encode(query, convert_to_numpy=True)
         if self.normalize:
             n = np.linalg.norm(vec)
             if n > 0:
@@ -175,7 +194,13 @@ class CorpusWrapper:
             # Only candidate exists
             return 1, 1, 0.0
         q_vec = self._embed_query(query)
-        c_vec = self.embedder.encode(candidate_text, convert_to_numpy=True)
+        if self.match_prompt_name:
+            try:
+                c_vec = self.embedder.encode(candidate_text, convert_to_numpy=True, prompt_name=self.match_prompt_name)
+            except Exception:
+                c_vec = self.embedder.encode(candidate_text, convert_to_numpy=True)
+        else:
+            c_vec = self.embedder.encode(candidate_text, convert_to_numpy=True)
         if self.normalize:
             c_norm = np.linalg.norm(c_vec)
             if c_norm > 0:

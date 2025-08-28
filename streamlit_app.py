@@ -136,6 +136,18 @@ if not st.button("Process", disabled=not can_process):
 if can_process:
     # ─────────── MODEL INFERENCE ───────────
     embedder, tokenizer, clf_model, device = load_models()
+    # Detect sentence-transformer prompts (if available) for query/match usage
+    query_prompt_name = None
+    match_prompt_name = None
+    try:
+        # Access internal config if present
+        st_cfg = getattr(embedder, 'config', None) or {}
+        prompts = st_cfg.get('prompts') if isinstance(st_cfg, dict) else None
+        if prompts and 'query' in prompts and 'match' in prompts:
+            query_prompt_name = 'query'
+            match_prompt_name = 'match'
+    except Exception:
+        pass
 
     # Encode corpus if file uploaded
     corpus_wrapper = None
@@ -147,7 +159,12 @@ if can_process:
     if corpus_df is not None and 'corpus_wrapper' not in st.session_state:
         with st.spinner('🧱 Indexing corpus (embedding segments) …'):
             try:
-                corpus_wrapper = CorpusWrapper(corpus_df, embedder)
+                corpus_wrapper = CorpusWrapper(
+                    corpus_df,
+                    embedder,
+                    query_prompt_name=query_prompt_name,
+                    match_prompt_name=match_prompt_name,
+                )
                 st.session_state['corpus_wrapper'] = corpus_wrapper
                 st.success(f"Corpus indexed: {len(corpus_wrapper)} segments.")
             except Exception as e:
